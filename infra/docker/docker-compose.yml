@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: career-copilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: career
+      POSTGRES_PASSWORD: career
+      POSTGRES_DB: career_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U career -d career_copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: career-copilot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: applies Alembic migrations then exits.
+  # `backend` waits for this to complete successfully via depends_on.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.backend
+    image: career-copilot-backend:latest
+    container_name: career-copilot-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../backend/.env
+    environment:
+      # Inside the compose network, Postgres is reachable by service name.
+      DATABASE_URL: postgresql+asyncpg://career:career@postgres:5432/career_copilot
+      REDIS_URL: redis://redis:6379/0
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.backend
+    image: career-copilot-backend:latest
+    container_name: career-copilot-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ../../backend/.env
+    environment:
+      # Override host-based defaults from .env with in-network service names.
+      DATABASE_URL: postgresql+asyncpg://career:career@postgres:5432/career_copilot
+      REDIS_URL: redis://redis:6379/0
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres_data:
+  redis_data:

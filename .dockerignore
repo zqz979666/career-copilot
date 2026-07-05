@@ -1,0 +1,35 @@
+# Local dev cruft that should NEVER end up in the image build context.
+# Keeping this small speeds up `docker build` and prevents leaking secrets.
+
+**/.venv
+**/venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+
+# Env files — image reads config via env vars at runtime, not baked in.
+**/.env
+**/.env.local
+**/.env.*.local
+
+# VCS + editor
+.git
+.gitignore
+.idea
+.vscode
+**/.DS_Store
+
+# Docs / infra we don't need inside the image
+infra/
+README.md
+Makefile
+
+# Local uploads / data
+**/uploads
+**/data
+**/tmp
+**/logs
