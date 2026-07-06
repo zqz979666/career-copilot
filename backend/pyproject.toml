@@ -1,7 +1,7 @@
 [project]
 name = "career-copilot-backend"
-version = "0.1.0"
-description = "AI Career Copilot backend service (v0.1 Alpha)"
+version = "1.0.0"
+description = "AI Career Copilot backend service (v1.0 GA — 4 Agent + Redis Streams + Analysis/Job + Documents + Trust Ladder)"
 requires-python = ">=3.11"
 
 dependencies = [
@@ -18,6 +18,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.35",
     "asyncpg>=0.29.0",
     "alembic>=1.13.0",
+    "pgvector>=0.3.0",          # v0.5: profile 语义检索 (pgvector 扩展)
 
     # Redis
     "redis>=5.0.0",
@@ -28,7 +29,7 @@ dependencies = [
 
     # LLM
     "anthropic>=0.39.0",
-    "openai>=1.54.0",           # Whisper API (speech-to-text)
+    "openai>=1.54.0",           # Whisper (STT) + text-embedding-3 (embeddings)
 
     # Document parsing
     "pypdf>=5.0.0",             # PDF text extraction
@@ -40,6 +41,7 @@ dependencies = [
     "structlog>=24.4.0",
     "pyyaml>=6.0.2",
     "tenacity>=9.0.0",
+    "cryptography>=43.0.0",     # v0.8: Fernet encryption for OAuth tokens
 ]
 
 [project.optional-dependencies]
@@ -50,6 +52,11 @@ dev = [
     "httpx>=0.27.0",
     "ruff>=0.7.0",
     "mypy>=1.11.0",
+]
+# PDF export (简历导出). WeasyPrint 依赖系统库 (pango/cairo)，
+# 因此单列为可选组；未安装时导出端点降级为 HTML/Markdown。
+pdf = [
+    "weasyprint>=62.0",
 ]
 
 [build-system]
@@ -66,6 +73,21 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
 ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom relies on function calls in argument
+# defaults (Depends/Query/File/Form/...). This is the documented pattern.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

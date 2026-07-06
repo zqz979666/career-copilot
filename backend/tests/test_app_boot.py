@@ -31,6 +31,15 @@ def test_import_app_module() -> None:
         "/api/v1/profile",
         "/api/v1/profile/resume",
         "/api/v1/settings",
+        # v0.8 GitHub OAuth + webhooks + integrations
+        "/api/v1/oauth/github/authorize",
+        "/api/v1/oauth/github/callback",
+        "/api/v1/oauth/github/callback/redirect",
+        "/api/v1/oauth",
+        "/api/v1/oauth/{provider}",
+        "/api/v1/oauth/github/sync",
+        "/api/v1/webhooks/github",
+        "/api/v1/integrations/events",
     }
     missing = expected - paths
     assert not missing, f"missing endpoints: {missing}"

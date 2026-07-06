@@ -1,7 +1,7 @@
 """Auth service — password hashing, JWT issuance/verification."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from jose import JWTError, jwt
@@ -59,7 +59,7 @@ class AuthService:
     def issue_token(self, user_id: UUID) -> tuple[str, int]:
         settings = self._settings
         expire_delta = timedelta(minutes=settings.jwt_expire_minutes)
-        expire_at = datetime.now(timezone.utc) + expire_delta
+        expire_at = datetime.now(UTC) + expire_delta
         payload = {"sub": str(user_id), "exp": expire_at}
         token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
         return token, int(expire_delta.total_seconds())

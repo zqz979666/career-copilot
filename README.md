@@ -1,20 +1,34 @@
-# AI Career Copilot — Backend (v0.1 Alpha)
+# AI Career Copilot — Backend (v0.8 Beta+)
 
-> AI 职业副驾驶后端服务的 **v0.1 Alpha** 骨架实现。
-> 目标：验证 "碎片输入 → 高质量周报" 的核心 Aha Moment。
+> AI 职业副驾驶后端服务的 **v0.8 Beta+** 实现。
+> 双尖刺（成果录入 + 简历生成）之上启动 **数据飞轮**：GitHub OAuth / Webhook
+> 拉入第三方经历，Master Agent 支持并行分发，Profile Engine 多源汇入 + 幂等。
 
-本目录只包含后端，覆盖了文档 `technical_implementation_guide.md` 第 4 章描述的
-v0.1 核心骨架：
+本仓库包含后端服务 + Chrome 扩展，覆盖 `v0.8_beta_plus_spec.md` 增量：
 
-- FastAPI 统一服务（异步）
-- **Agent Protocol** 预埋（v0.1 单 Agent，v0.5+ 扩展为多 Agent）
-- **LLM Gateway**（Claude Sonnet + Prompt Cache + Token/Cost 计量）
-- **EfficiencyAgent** 三个 Chain：`weekly_report` / `star` / `free_format`
-- **语音输入**（Whisper → 复用生成链路，SSE 返回 transcript + 内容）
-- **简历上传解析**（PDF / DOCX / TXT → LLM 结构化 → 落库 profiles）
-- SSE 流式生成端点 `/api/v1/generate` `/api/v1/generate/voice`
-- JWT 认证 + Level 0 匿名生成
-- PostgreSQL + Redis + Alembic 迁移
+**v0.1 → v0.5 基础（延续）**
+- FastAPI 统一异步服务、JWT 认证 + Level 0 匿名生成
+- **LLM Gateway**（Claude + Prompt Cache + Token/Cost 计量 + 流式/阻塞/Vision）
+- **Master Agent v0.5**：二段意图分类（Rule → Haiku fallback）→ Efficiency / Resume
+- **Profile Engine v0.5**：Ingester → Merger → ConfidenceScorer → Summarizer + pgvector 语义检索
+- **Resume Studio + JD 分析 + Evidence Chain**、语音（Whisper）、截图（Vision）、Chrome 扩展 v0.5
+
+**v0.8 新增**
+- **GitHub OAuth + Webhook**（`app/integrations/github.py`）：`read:user user:email repo`
+  最小 scope；HMAC-SHA256 常量时间校验；`X-Hub-Signature-256` 失败即 401。
+- **Data Minimizer**：PR/Push 事件只保留 `title / body[:500] / repo / merged` 等白名单字段，
+  丢弃 diff / review_comments / reviewers / 文件列表。
+- **OAuth 令牌加密存储**（`app/security/crypto.py`）：Fernet（AES-128-CBC + HMAC-SHA256）
+  写入 `oauth_connections.access_token_encrypted`；`INTEGRATION_ENCRYPTION_KEY` 未设置时
+  仅在开发环境下从 `JWT_SECRET_KEY` 派生一把 dev 密钥。
+- **Profile Engine v0.8**：`ingest_third_party()` 走同一 Merger；`profile_entries.source_ref`
+  作为第三方幂等键（`github:pr:{node_id}` / `github:repo:{name}`）——同一 PR 重放
+  **不**累加 `occurrences`，避免置信度虚增。
+- **GitHubSyncService**：手动同步 + Webhook 幂等入账 ledger（`sync_events (provider, external_id)` UNIQUE）。
+- **Master Agent 并行分发**：`dispatch_parallel()` 由 `MASTER_PARALLEL_ENABLED` 开关，
+  extras 用 `asyncio.create_task` 并发跑，失败静默降级；primary 结果永远返回。
+- **Chrome 扩展 v0.8**：Side Panel（Chrome ≥ 114）+ 快捷键 `Alt+Shift+C` + GitHub PR 列表页
+  「⇆ 拉取我的 PR」+ 通知（`chrome.notifications`）。
 
 ---
 
@@ -28,23 +42,25 @@ career-copilot/
 │   │   ├── config.py            pydantic-settings 配置
 │   │   ├── db.py                SQLAlchemy async engine / session
 │   │   ├── dependencies.py      FastAPI DI wiring
-│   │   ├── logging_config.py    structlog
-│   │   ├── api/v1/              路由 (auth / generate / history / meta)
-│   │   ├── api/middleware/      请求 ID 中间件
-│   │   ├── agents/              Agent Protocol + EfficiencyAgent
-│   │   ├── llm/                 LLM Gateway
+│   │   ├── api/v1/              路由 (auth/generate/history/profile/resumes/jd/settings)
+│   │   ├── api/middleware/      请求 ID / 频率限制 中间件
+│   │   ├── agents/              Master + Efficiency + Resume Agent
+│   │   ├── llm/                 LLM Gateway(+Vision) / Embeddings / json_utils
 │   │   ├── models/              ORM + Pydantic schemas
-│   │   ├── repository/          数据访问层
-│   │   └── services/            业务服务 (auth / generate)
-│   ├── prompts/                 YAML prompt 模板
-│   ├── migrations/              Alembic
-│   ├── tests/                   pytest 冒烟
-│   ├── pyproject.toml
+│   │   ├── repository/          数据访问层 (profile_entry / resume / jd / evidence ...)
+│   │   └── services/            业务服务 (generate / profile_engine / resume_studio / jd ...)
+│   ├── prompts/                 YAML prompt 模板 (周报/月报/晋升/PR/JD/简历...)
+│   ├── migrations/              Alembic (0001 initial + 0002 v0.5 pgvector)
+│   ├── tests/                   pytest 单元测试
+│   ├── pyproject.toml           含可选 [pdf] 组 (WeasyPrint)
 │   └── .env.example
+├── extension/                   Chrome 扩展原型 (Manifest V3)
+│   ├── manifest.json  background.js  content.js
+│   ├── popup.html/js  options.html/js  README.md
 ├── infra/
 │   └── docker/
-│       ├── docker-compose.yml   Postgres + Redis
-│       └── Dockerfile.backend
+│       ├── docker-compose.yml   pgvector/pgvector:pg15 + Redis + migrate + backend
+│       └── Dockerfile.backend   含 WeasyPrint 系统库 + fonts-noto-cjk
 ├── Makefile
 └── .gitignore
 ```
@@ -107,16 +123,28 @@ make dev           # uvicorn --reload
 | Key | 说明 |
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API Key，必须填写（https://console.anthropic.com） |
-| `OPENAI_API_KEY` | OpenAI Key，用于 Whisper 语音端点（不用语音功能可留空） |
-| `LLM_DEFAULT_MODEL` | 默认 `claude-sonnet-4-5`，也可换 `claude-sonnet-4-6` 等 |
-| `WHISPER_MODEL` | 默认 `whisper-1` |
-| `WHISPER_LANGUAGE` | ISO-639-1，默认 `zh`；留空则自动检测 |
+| `OPENAI_API_KEY` | OpenAI Key，用于 Whisper 语音 **+ Profile embeddings**（留空则语义检索降级为关键词/时间序） |
+| `LLM_DEFAULT_MODEL` | 默认 `claude-sonnet-4-5` |
+| `LLM_INTENT_MODEL` | Master Agent 意图分类兜底模型，默认 `claude-haiku-4-5` |
+| `VISION_MODEL` | 截图 OCR 模型，默认 `claude-sonnet-4-5` |
+| `EMBEDDING_ENABLED` / `EMBEDDING_MODEL` / `EMBEDDING_DIM` | pgvector 语义检索；默认 `text-embedding-3-small` (1536) |
+| `RESUME_MAX_VERSIONS` / `RESUME_RETRIEVAL_TOP_K` | 简历版本上限 / 送 Resume Agent 的 Profile 条目数 |
+| `WHISPER_MODEL` / `WHISPER_LANGUAGE` | 默认 `whisper-1` / `zh`（留空自动检测） |
 | `JWT_SECRET_KEY` | 生产环境请用 `openssl rand -hex 32` 生成 32-byte hex |
-| `DATABASE_URL` | 默认指向 compose 内的 Postgres；docker 模式会被 compose override |
-| `REDIS_URL` | 同上 |
-| `DOCUMENT_MAX_UPLOAD_BYTES` | 简历/音频上传大小上限（默认 10 MB） |
-| `DOCUMENT_MAX_CHARS` | 简历文本送 LLM 前的截断上限（默认 20k） |
+| `DATABASE_URL` / `REDIS_URL` | 默认指向本地；docker 模式会被 compose override 为服务名 |
+| `DOCUMENT_MAX_UPLOAD_BYTES` / `DOCUMENT_MAX_CHARS` | 上传大小上限（默认 10 MB）/ 送 LLM 截断上限（默认 20k） |
 | `RATE_LIMIT_ANON_PER_HOUR` / `RATE_LIMIT_USER_PER_HOUR` | 匿名 / 已登录用户配额 |
+| **v0.8** `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth App 凭据；留空则 OAuth 端点返回 503 |
+| **v0.8** `GITHUB_OAUTH_SCOPES` | 默认 `read:user user:email repo`；仅公共 PR 可改为 `... public_repo` |
+| **v0.8** `GITHUB_OAUTH_REDIRECT_URI` | OAuth 回调 URL，需与 GitHub App 后台一致 |
+| **v0.8** `GITHUB_WEBHOOK_SECRET` | Webhook HMAC 校验密钥；留空则所有 webhook 一律 401 |
+| **v0.8** `GITHUB_SYNC_MAX_PRS` / `GITHUB_PR_BODY_MAX_CHARS` | 手动同步 PR 上限（默认 30）/ PR body 截断（默认 500） |
+| **v0.8** `INTEGRATION_ENCRYPTION_KEY` | Fernet key（`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`）；留空开发环境自动从 `JWT_SECRET_KEY` 派生 |
+| **v0.8** `MASTER_PARALLEL_ENABLED` | Master Agent 并行分发开关；默认 `true` |
+
+> **PDF 导出**：`WeasyPrint` 依赖系统库（pango/cairo），单列为可选组。本地
+> `make install-pdf` 安装 `.[dev,pdf]`；docker 镜像已内置系统库 + 中文字体。
+> 未安装时简历导出端点自动降级为 HTML / Markdown。
 
 > 注意：`backend/.env` 里的 `DATABASE_URL` / `REDIS_URL` 是给**本地 venv**用的
 > （`localhost:5432` / `localhost:6379`）。docker 模式下 compose 会用服务名覆盖成
@@ -272,53 +300,221 @@ curl -sS -X PATCH http://localhost:8000/api/v1/settings \
 
 ---
 
-## 已实现 vs 待实现（v0.1 完整 spec 对照）
+## v0.5 端到端手测（双尖刺）
+
+以下均需登录（`TOKEN` 见上文注册流程）。
+
+**① 意图识别（Master Agent）**：
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/intent \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"task_type":"auto","input_content":"帮我把这季度的工作整理成晋升材料"}' | jq .
+# → {"intent":"promotion","task_type":"promotion","agent_type":"efficiency","method":"rule",...}
+```
+
+**② 工作成果录入（auto 自动路由 + Profile 累积）**：
+
+```bash
+# task_type=auto 让 Master Agent 决定用哪条链；生成后异步 ingest 到 Profile Engine
+curl -N -X POST http://localhost:8000/api/v1/generate \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"task_type":"auto","input_content":"这个月主导了支付网关重构，P99 从 800ms 降到 120ms，接入 5 个业务方"}'
+
+# 触发 Profile 重编译后，查看快照 / 条目
+curl -sS -X POST http://localhost:8000/api/v1/profile/rebuild -H "Authorization: Bearer $TOKEN" | jq .
+curl -sS http://localhost:8000/api/v1/profile/snapshot -H "Authorization: Bearer $TOKEN" | jq .
+curl -sS http://localhost:8000/api/v1/profile/entries -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+**③ 截图解析（Vision OCR）**：
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/profile/screenshot \
+  -H "Authorization: Bearer $TOKEN" -F "image=@dashboard.png" | jq .
+```
+
+**④ JD 分析 + 匹配（Evidence Chain）**：
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/jd/analyze \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"jd_text":"资深后端工程师，要求精通分布式、高并发，有支付/交易系统经验...","with_matching":true}' | jq .
+# → analysis(要求拆解) + matching(逐项匹配 + evidence_chain + overall_score)
+```
+
+**⑤ 简历生成 / 管理 / 诊断 / 导出**：
+
+```bash
+# 基于 Profile（可选绑定某次 JD 分析做定向优化）生成一版简历
+RID=$(curl -sS -X POST http://localhost:8000/api/v1/resumes \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"后端-字节版","target_jd":"资深后端工程师..."}' | jq -r .id)
+
+curl -sS http://localhost:8000/api/v1/resumes -H "Authorization: Bearer $TOKEN" | jq .            # 列表
+curl -sS -X POST http://localhost:8000/api/v1/resumes/diagnose \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"resume_id\":\"$RID\"}" | jq .                                                            # 诊断
+
+# 导出（format=md|html|pdf；未装 WeasyPrint 时 pdf 自动降级）
+curl -sS "http://localhost:8000/api/v1/resumes/$RID/export?format=md" -H "Authorization: Bearer $TOKEN"
+curl -sS "http://localhost:8000/api/v1/resumes/$RID/export?format=pdf" -H "Authorization: Bearer $TOKEN" -o resume.pdf
+```
+
+**⑥ Chrome 扩展**：见 `extension/README.md`（`chrome://extensions` → 开发者模式 → 加载 `extension/` 目录）。
+
+---
+
+## v0.8 端到端手测（GitHub 数据飞轮）
+
+前置：在 GitHub → Settings → Developer settings → OAuth Apps 注册一个 App，
+`Authorization callback URL` 填 `http://localhost:8000/api/v1/oauth/github/callback`，
+把 Client ID / Secret 填入 `backend/.env`，重启后端。
+
+**① 授权 → 回调**：
+
+```bash
+# 浏览器打开（需要登录态 cookie / bearer）
+open "http://localhost:8000/api/v1/oauth/github/authorize" \
+  # 前端一般拿到 authorize_url 后再跳
+```
+
+`GET /api/v1/oauth/github/authorize` 返回 `{provider, authorize_url, state}` 并写入
+两条 HttpOnly cookie（`oauth_state` / `oauth_uid`，`SameSite=Lax`，10 分钟过期）。
+GitHub 授权完跳回 `/callback`，服务端校验 state → 交换 code → Fernet 加密 access_token
+写入 `oauth_connections`。
+
+**② 手动同步 PR**：
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/oauth/github/sync \
+  -H "Authorization: Bearer $TOKEN" | jq .
+# → {"fetched":27,"created":24,"updated":3,"skipped_duplicates":0}
+```
+
+- `fetched`：从 GitHub 拉到的 PR 数
+- `created` / `updated`：Profile 新增 / 更新的条目
+- `skipped_duplicates`：`sync_events` ledger 已存在的重复投递
+
+**③ Webhook 落库**（GitHub → Repo → Settings → Webhooks 配置 `POST /api/v1/webhooks/github`，
+Content type `application/json`，Secret = `GITHUB_WEBHOOK_SECRET`；关注 `pull_request` / `push`）。
+
+**④ 查看同步事件流水**：
+
+```bash
+curl -sS "http://localhost:8000/api/v1/integrations/events?limit=20" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+**⑤ 解除绑定**：
+
+```bash
+curl -sS -X DELETE http://localhost:8000/api/v1/oauth/github \
+  -H "Authorization: Bearer $TOKEN" -o /dev/null -w "%{http_code}\n"
+# → 204
+```
+
+---
+
+## 已实现 vs 待实现（v0.5 spec 对照）
 
 | 功能 | 状态 | 说明 |
 |---|---|---|
-| 文本输入 → 周报生成 | ✅ | `/api/v1/generate` |
-| STAR / 自由格式 | ✅ | `task_type` 切换 |
-| SSE 流式输出 | ✅ | 3 种 event: `message` / `done` / `error` |
-| Level 0 匿名 | ✅ | 不带 Authorization 即可调用 |
-| 注册 / 登录 (email) | ✅ | JWT (HS256) |
-| 历史记录 | ✅ | `/api/v1/history` |
-| Prompt Cache | ✅ | 系统 prompt `cache_control: ephemeral` |
-| 语音输入（Whisper） | ✅ | `/api/v1/generate/voice`，支持 mp3/m4a/wav/webm 等 |
-| 简历上传解析 | ✅ | `/api/v1/profile/resume` (PDF / DOCX / TXT) |
-| 用户反馈（评分 + 编辑） | ✅ | `PATCH /api/v1/history/{id}`，自动计算 `edit_ratio` |
-| 无记忆模式切换 | ✅ | `GET/PATCH /api/v1/settings`，`full`/`selective`/`none` |
-| 频率限制 | ✅ | Redis 固定窗口：匿名 5/h、登录 60/h（Redis 失效时 fail-open） |
-| 结构化副产品提取 | ✅ | 生成后异步写入 `extracted_data`（`memory_mode=full` 才提取） |
-| 简历原文 S3 存储 | ⏳ | v0.1 只落结构化字段，`raw_resume_url` 待 v0.5 |
-| Landing Page / 工作台 | ⏳ | 前端未启动（本轮范围仅后端骨架） |
+| 文本 → 周报 / STAR / 自由格式 | ✅ | `/api/v1/generate`，SSE 流式 |
+| 月报 / 晋升 / PR 解析 / 会议解析 | ✅ | v0.5 新增 EfficiencyAgent 链 |
+| Master Agent 意图分类 | ✅ | `/api/v1/intent`，Rule → Haiku fallback；`task_type=auto` 自动路由 |
+| 语音输入（Whisper） | ✅ | `/api/v1/generate/voice` |
+| 截图解析（Vision OCR） | ✅ | `/api/v1/profile/screenshot` |
+| 简历上传解析 | ✅ | `/api/v1/profile/resume`，并 seed 到 Profile Engine |
+| **Profile Engine v0.5** | ✅ | Ingester/Merger/ConfidenceScorer/Summarizer + pgvector 语义检索 |
+| Profile 快照 / 条目管理 / 确认 | ✅ | `/api/v1/profile/snapshot` `entries` `entries/confirm` `rebuild` `export` |
+| **简历生成 / 多版本管理** | ✅ | `/api/v1/resumes`（生成/列表/取/改/删），上限 `RESUME_MAX_VERSIONS` |
+| 简历诊断 | ✅ | `/api/v1/resumes/diagnose` |
+| 简历导出 MD / HTML / PDF | ✅ | `/api/v1/resumes/{id}/export`；PDF 走 WeasyPrint（可选，缺失则降级） |
+| **JD 分析 + 匹配 + Evidence Chain** | ✅ | `/api/v1/jd/analyze`（数据依据/推理/置信度/建议） |
+| 注册 / 登录 / 历史 / 反馈 / 记忆模式 | ✅ | 延续 v0.1 |
+| 频率限制 | ✅ | Redis 固定窗口（fail-open） |
+| Prompt Cache / Token & Cost 计量 | ✅ | LLM Gateway 统一入口 |
+| Chrome 扩展原型 | ✅ | `extension/`（Manifest V3） |
+| **GitHub OAuth + Webhook**（v0.8） | ✅ | `/api/v1/oauth/github/*`、`/api/v1/webhooks/github`；Fernet 加密令牌；HMAC 校验 |
+| **Profile 多源汇入 + 幂等**（v0.8） | ✅ | `source_ref = github:pr:{node_id}`；`sync_events (provider, external_id)` UNIQUE |
+| **Master Agent 并行分发**（v0.8） | ✅ | `MASTER_PARALLEL_ENABLED`；`dispatch_parallel(primary, extras)` |
+| **Chrome 扩展 v0.8**（Side Panel + GitHub 同步） | ✅ | `extension/sidepanel.html/js`、`Alt+Shift+C` 快捷键、通知 |
+| Landing Page / Web 工作台 | ⏳ | 本轮范围为后端 + 扩展；Web 前端后续版本 |
+| 简历原文对象存储 | ⏳ | 当前落结构化字段 + Evidence 原文入库，S3 待接入 |
 
 ---
 
 ## 关键设计说明
 
-### Agent Protocol（预埋抽象）
+### Master Agent（v0.5 编排）
 
-`app/agents/base.py` 定义了 `BaseAgent` + `AgentRouter`：
+`app/agents/master.py` 取代 v0.1 的硬编码 `AgentRouter`：
 
-- v0.1 只有一个 Agent (`EfficiencyAgent`)，路由是硬编码规则。
-- v0.5 将把 `AgentRouter` 升级为 Master Agent（Rule → Haiku fallback 二段意图分类），
-  接口不变，`GenerateService` 无需改造。
+- **二段意图分类**：先走规则表（关键词/正则，零成本、可预测），命中即返回；
+  未命中才 fallback 到 Haiku（`LLM_INTENT_MODEL`）做结构化分类。
+- 路由到 `EfficiencyAgent`（录入/改写，流式）或 `ResumeAgent`（简历/JD，阻塞 JSON）。
+- `task_type=auto` 时由 `GenerateService.resolve_intent` 调用分类；接口对上层透明。
+
+### Profile Engine v0.5（数据通道）
+
+`app/services/profile_engine.py` + `profile_merge.py`（纯逻辑，便于单测）：
+
+- **Ingester**：消费 `extracted_data`（生成副产品）+ 简历 seed，转成候选条目。
+- **Merger**：`dedup_key` 实体对齐去重，重复出现累加 `occurrences`。
+- **ConfidenceScorer**：按来源类型/出现次数打分，低分条目走人工确认。
+- **Summarizer + Snapshot**：编译成 `profile.snapshot`（结构化）+ `summary`（供 prompt 注入）。
+- **语义检索**：`profile_entries.embedding`（pgvector, HNSW 索引）+ OpenAI embeddings；
+  无 key 时降级为关键词/时间序检索，写 NULL 向量。
+
+### Evidence Chain（v0.5 诚实护栏）
+
+`app/services/evidence.py`：JD 匹配的每一项都附带 **数据依据 / 推理 / 置信度 / 建议**，
+并做 honesty guard（无依据不虚构），`overall_score` / `summarize_gaps` 汇总差距。
 
 ### LLM Gateway（唯一 LLM 入口）
 
 `app/llm/gateway.py` 是 **所有 LLM 调用的必经之路**（架构红线 #4）：
 
-- Prompt Cache 从 v0.1 开启（`cache_control: ephemeral`）。
-- Token 计量 + 成本追踪（含 cache read / cache creation 精细拆分）。
-- 支持 `generate()`（阻塞）和 `stream()` / `stream_with_usage()`（流式，含 usage 回调）。
+- Prompt Cache（`cache_control: ephemeral`）+ Token/Cost 计量（cache read/creation 拆分）。
+- `generate()`（阻塞）/ `stream()` / `stream_with_usage()`（流式）/ `generate_vision()`（多模态截图）。
 - 定价表覆盖 Sonnet 4.x / Haiku 4.5 / Opus 4.6，模型前缀匹配。
 
-### 降级 / 未来演进
+### 技术基线取舍（对齐 PMO review）
 
-- **Profile Engine**：v0.1 只落库到 `generations` + `extracted_data`；v0.5 引入
-  ingester / merger / summarizer / pgvector。
-- **Redis Streams**：v0.1 未使用；v1.0 引入事件总线。
-- **Master Agent**：v0.5 上线；v0.1 路由是纯规则。
+- **pgvector 而非 Qdrant**：v0.5 数据量下 pgvector 足够，少一个组件、复用 PG 事务。
+- **asyncio 后台任务而非 Celery**：`generate → extract → ingest` 用 fire-and-forget
+  `asyncio.create_task`，够用且可测；重任务队列留待后续版本。
+- **WeasyPrint 可选**：PDF 依赖系统库，单列 `[pdf]` 组，缺失时导出降级为 HTML/MD。
+
+### v0.8 GitHub OAuth + Webhook（数据飞轮）
+
+`app/integrations/github.py` + `app/services/{oauth_service,github_sync_service}.py`：
+
+- **OAuth 握手**：`GET /authorize` 用 `secrets.token_urlsafe(24)` 生成 CSRF state，
+  同时写 HttpOnly `oauth_state` + `oauth_uid` cookie（`SameSite=Lax`, 10 分钟）。
+  回调校验 state 一致 → 交换 code → `GitHubClient.get_user` → 更新 `users.github_*` +
+  upsert `oauth_connections`。防跨账户抢注：同一 `github_user_id` 已绑定其他账号即拒绝。
+- **令牌加密**（`app/security/crypto.py`）：Fernet（AES-128-CBC + HMAC-SHA256）
+  写入 `oauth_connections.access_token_encrypted`；`INTEGRATION_ENCRYPTION_KEY` 未设置
+  会从 `JWT_SECRET_KEY` 派生一把 dev key，方便本地调试。生产必须显式设置。
+- **Webhook HMAC**（`verify_webhook_signature`）：`X-Hub-Signature-256` 头 → `hmac.compare_digest`
+  常量时间校验；密钥缺失 / 算法前缀不是 `sha256` / body 被篡改 → 一律 401。
+- **Data Minimizer**（`extract_pr_minimal` / `extract_push_minimal`）：仅保留白名单字段
+  （`title`, `body[:500]`, `repo_full_name`, `merged`, ...），丢弃 diff / review_comments /
+  reviewers / 文件列表。commit 只留 message 首行。
+- **幂等 ledger**：`sync_events (provider, external_id)` UNIQUE + `profile_entries.source_ref`
+  UNIQUE per (user, source_type)。Webhook 重投 / 手动 re-sync 会命中同一行更新内容，
+  **不**累加 `occurrences`（避免置信度虚增）。
+
+### v0.8 Master Agent 并行分发
+
+`MasterAgent.dispatch_parallel(context, extras_task_types)`：
+
+- 由 `MASTER_PARALLEL_ENABLED` 一刀切控制；关闭后行为完全退回单 Agent。
+- Primary 与 extras 通过 `asyncio.create_task` 并发；extras 失败（含 `NotImplementedError`）
+  静默丢弃，**永远**不影响 primary 的返回。用于「帮我写周报同时把这次经历加进简历」
+  这类可自然并行的复合意图。
 
 ### 频率限制（Redis 固定窗口）
 
@@ -360,8 +556,10 @@ make logs          # 跟随 backend 日志
 make ps            # 服务状态
 
 # --- 本地 venv 模式 ---
+make install       # pip install -e '.[dev]'
+make install-pdf   # pip install -e '.[dev,pdf]' (含 WeasyPrint，需系统库)
 make db-up         # 只启动 Postgres+Redis
-make migrate       # 应用迁移（本地 venv）
+make migrate       # 应用迁移（本地 venv，含 0002 pgvector）
 make dev           # 开发模式启动（reload）
 make lint          # ruff 检查
 make format        # ruff 自动修复
@@ -377,10 +575,10 @@ make db-nuke       # 关闭并删除数据卷（慎用）
 
 | 版本 | 里程碑 | 关键新组件 |
 |---|---|---|
-| **v0.1 Alpha** | 核心 Aha 验证（本骨架） | PG / Redis / S3 |
+| v0.1 Alpha | 核心 Aha 验证 | PG / Redis / S3 |
 | v0.3 Alpha+ | 录入习惯养成 | (0 新组件) |
-| v0.5 Beta | 简历价值验证 | pgvector + Celery |
-| v0.8 Beta+ | 数据飞轮启动 | Qdrant (条件) + OAuth |
+| v0.5 Beta | 双尖刺：成果录入 + 简历生成 | pgvector + Vision + 扩展 |
+| **v0.8 Beta+（本版本）** | 数据飞轮启动 | GitHub OAuth + Webhook + Fernet + 并行 Master |
 | v1.0 GA | 留存闭环 | Redis Streams |
 | v1.5 Pro | 付费验证 | Stripe + 对话引擎 |
 | v2.0 Scale | 规模化 | Neo4j + Kafka + i18n |

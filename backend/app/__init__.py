@@ -1,3 +1,3 @@
-"""AI Career Copilot backend (v0.1 Alpha)."""
+"""AI Career Copilot backend (v1.0 GA)."""
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

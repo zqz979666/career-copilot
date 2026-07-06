@@ -31,7 +31,7 @@ def _build_docx_bytes(paragraphs: list[str]) -> bytes:
 
 
 def test_extract_txt_utf8() -> None:
-    data = "张三\n后端工程师\n5 年经验".encode("utf-8")
+    data = "张三\n后端工程师\n5 年经验".encode()
     result = extract_resume_text(data=data, filename="cv.txt", content_type="text/plain")
     assert result.format == "txt"
     assert "张三" in result.text

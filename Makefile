@@ -1,5 +1,5 @@
 # AI Career Copilot — Makefile
-# 主要用于 v0.1 Alpha 阶段的本地开发流程。
+# 本地开发 / 一键 docker 栈流程 (v0.5 Beta)。
 
 BACKEND := backend
 COMPOSE := docker compose -f infra/docker/docker-compose.yml
@@ -32,6 +32,11 @@ venv:
 .PHONY: install
 install:
 	cd $(BACKEND) && pip install -e ".[dev]"
+
+# Adds WeasyPrint for PDF export (需系统库 pango/cairo，见 README)。
+.PHONY: install-pdf
+install-pdf:
+	cd $(BACKEND) && pip install -e ".[dev,pdf]"
 
 .PHONY: db-up
 db-up:
@@ -116,4 +121,9 @@ smoke:
 	  -H 'Content-Type: application/json' \
 	  -d '{"task_type":"weekly_report","input_content":"这周做了三件事：1) 上线了新的推荐算法；2) 修复了一个用户投诉最多的 Bug；3) 帮同事 review 了两个 PR。"}' \
 	  | head -c 2048
+	@echo "\n== /api/v1/intent (意图识别) =="
+	@curl -sS -X POST http://localhost:8000/api/v1/intent \
+	  -H 'Content-Type: application/json' \
+	  -d '{"task_type":"auto","input_content":"帮我把这些工作内容整理成一份简历"}' | jq . \
+	  || echo "(需要有效的 LLM key / 已登录)"
 	@echo "\n"

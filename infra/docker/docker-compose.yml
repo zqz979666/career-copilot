@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    # v0.5: pgvector-enabled Postgres (Profile semantic search). The
+    # `CREATE EXTENSION vector` in migration 0002 requires this image.
+    image: pgvector/pgvector:pg15
     container_name: career-copilot-postgres
     restart: unless-stopped
     environment:

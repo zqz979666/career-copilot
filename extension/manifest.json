@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "AI Career Copilot",
+  "version": "0.8.0",
+  "description": "把工作成果 / PR / JD 一键送入 AI Career Copilot；Side Panel 内可直接查看 Profile 与最近同步（v0.8 Beta+）。",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://api.github.com/*",
+    "https://github.com/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "AI Career Copilot",
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://github.com/*/pull/*",
+        "https://github.com/*/pulls*",
+        "https://*.jobs/*",
+        "https://*/jobs/*",
+        "https://www.linkedin.com/jobs/*",
+        "https://www.zhipin.com/*",
+        "https://www.lagou.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "打开 Career Copilot 快速录入"
+    }
+  }
+}

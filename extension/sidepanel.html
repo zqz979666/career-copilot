@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>Career Copilot · 侧边栏</title>
+    <style>
+      body {
+        font-family: -apple-system, "PingFang SC", sans-serif;
+        margin: 0;
+        padding: 14px;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      h1 { font-size: 15px; margin: 0 0 12px; }
+      h2 { font-size: 13px; margin: 18px 0 6px; color: #334155; }
+      .card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      button {
+        background: #4f46e5;
+        color: #fff;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #0f172a;
+      }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .muted { color: #64748b; font-size: 12px; }
+      .stat { font-size: 22px; font-weight: 600; }
+      .stat-label { font-size: 11px; color: #64748b; }
+      ul { padding-left: 18px; margin: 6px 0; font-size: 12px; }
+      li { margin-bottom: 4px; }
+      .pill {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        background: #e0e7ff;
+        color: #4338ca;
+        margin-right: 4px;
+      }
+      .pill.err { background: #fee2e2; color: #b91c1c; }
+      .pill.ok { background: #dcfce7; color: #166534; }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 13px;
+        min-height: 72px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #cbd5e1;
+      }
+      #status { font-size: 12px; color: #475569; min-height: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>🚀 Career Copilot · v0.8</h1>
+
+    <div class="card">
+      <h2>快速录入</h2>
+      <textarea id="quick" placeholder="随手记：例如「本周上线了推荐算法灰度，CTR +3%」"></textarea>
+      <div class="row" style="margin-top: 8px;">
+        <select id="task">
+          <option value="auto">自动识别</option>
+          <option value="weekly_report">周报</option>
+          <option value="free_format">自由格式</option>
+          <option value="star">STAR</option>
+          <option value="pr_parse">PR 解析</option>
+        </select>
+        <button id="send">发送</button>
+        <span id="status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Profile 概览</h2>
+      <div class="row">
+        <div>
+          <div class="stat" id="entry-count">–</div>
+          <div class="stat-label">条目总数</div>
+        </div>
+        <div style="margin-left: 24px;">
+          <div class="stat" id="version">–</div>
+          <div class="stat-label">Profile 版本</div>
+        </div>
+        <button class="secondary" id="refresh-profile" style="margin-left: auto;">刷新</button>
+      </div>
+      <pre id="summary" class="muted" style="white-space: pre-wrap; margin: 8px 0 0;"></pre>
+    </div>
+
+    <div class="card">
+      <h2>GitHub 集成</h2>
+      <div class="row">
+        <button id="gh-sync">⇆ 拉取最近 PR</button>
+        <button class="secondary" id="refresh-events">刷新事件</button>
+      </div>
+      <ul id="events"><li class="muted">加载中…</li></ul>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top: 0;">设置</h2>
+      <a id="opts" href="#">⚙ 修改 API 地址 / Token</a>
+    </div>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

@@ -14,9 +14,10 @@ Model pricing (USD per 1M tokens, Claude Sonnet 4.x class):
 """
 from __future__ import annotations
 
+import base64
 import time
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from anthropic import APIError, AsyncAnthropic
@@ -136,6 +137,50 @@ class LLMGateway:
         usage = self._compute_usage(response.usage, time.time() - start, model)
         self._track(usage)
         logger.info("llm_generate_ok", **usage.to_dict())
+        return text, usage
+
+    async def generate_vision(
+        self,
+        system_prompt: str,
+        user_message: str,
+        image_bytes: bytes,
+        media_type: str = "image/png",
+        config: LLMConfig | None = None,
+        cache_system_prompt: bool = True,
+    ) -> tuple[str, LLMUsage]:
+        """Blocking multimodal generation (image + text). Returns (text, usage).
+
+        Used for screenshot OCR / structuring (v0.5 EfficiencyAgent
+        screenshot_parse). The image is sent base64-encoded alongside the text
+        instruction.
+        """
+        model, max_tokens, temperature = self._resolve(config)
+        start = time.time()
+        b64 = base64.standard_b64encode(image_bytes).decode("ascii")
+        content = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": b64},
+            },
+            {"type": "text", "text": user_message},
+        ]
+
+        try:
+            response = await self._client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=self._build_system(system_prompt, cache_system_prompt),
+                messages=[{"role": "user", "content": content}],
+            )
+        except APIError as e:
+            logger.error("llm_vision_api_error", error=str(e), model=model)
+            raise
+
+        text = "".join(block.text for block in response.content if block.type == "text")
+        usage = self._compute_usage(response.usage, time.time() - start, model)
+        self._track(usage)
+        logger.info("llm_vision_ok", **usage.to_dict())
         return text, usage
 
     async def stream(

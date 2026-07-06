@@ -1,9 +1,7 @@
-"""EfficiencyAgent — v0.1 sole agent implementation.
+"""EfficiencyAgent — work-output録入 & rewriting agent.
 
-Owns three chains:
-    - weekly_report
-    - star
-    - free_format
+v0.1 chains: weekly_report / star / free_format.
+v0.5 adds:  monthly_report / promotion / pr_parse / meeting_parse.
 
 Each chain is a `(prompt template name, model config)` pair. Chains share the
 same LLM Gateway and identical streaming/extraction plumbing.
@@ -22,13 +20,20 @@ logger = get_logger(__name__)
 
 _TASK_TO_PROMPT: dict[str, str] = {
     "weekly_report": "weekly_report",
+    "monthly_report": "monthly_report",
     "star": "star",
     "free_format": "free_format",
+    "promotion": "promotion",
+    "pr_parse": "pr_parse",
+    "meeting_parse": "meeting_parse",
 }
+
+# Task types this agent can serve — consumed by the router/master agent.
+EFFICIENCY_TASKS: frozenset[str] = frozenset(_TASK_TO_PROMPT)
 
 
 class EfficiencyAgent(BaseAgent):
-    """Handles all "work-output rewriting" tasks in v0.1."""
+    """Handles all "work-output録入 / rewriting" tasks."""
 
     agent_type = AgentType.EFFICIENCY
 

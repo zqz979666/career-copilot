@@ -7,7 +7,6 @@ from app.llm.gateway import LLMGateway
 
 
 def test_pricing_sonnet_costs() -> None:
-    gw = LLMGateway.__new__(LLMGateway)  # skip __init__ (no client needed)
     usage = LLMGateway._compute_usage(
         SimpleNamespace(
             input_tokens=1000,

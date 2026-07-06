@@ -57,3 +57,31 @@ class UserRepository:
             _select(User.memory_mode).where(User.id == user_id)
         )
         return result.scalar_one_or_none()
+
+    # ---------- v0.8 GitHub linkage ----------
+
+    async def find_by_github_user_id(self, github_user_id: str) -> User | None:
+        result = await self.session.execute(
+            select(User).where(User.github_user_id == github_user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def link_github(
+        self, user_id: UUID, *, github_user_id: str, github_login: str | None
+    ) -> User | None:
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return None
+        user.github_user_id = github_user_id
+        user.github_login = github_login
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
+    async def unlink_github(self, user_id: UUID) -> None:
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return
+        user.github_user_id = None
+        user.github_login = None
+        await self.session.commit()

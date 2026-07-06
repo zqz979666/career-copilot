@@ -30,11 +30,22 @@ class PromptTemplate:
     system: str
     user_template: str
 
-    def render_user(self, input_content: str, profile_block: str = "") -> str:
-        return self.user_template.format(
-            input_content=input_content.strip(),
-            profile_block=profile_block.strip(),
-        ).strip()
+    def render(self, **kwargs: str) -> str:
+        """Render the user template by replacing ``{key}`` tokens.
+
+        Uses plain token replacement (not ``str.format``) so JSON schemas /
+        literal braces elsewhere in the template don't blow up. Unknown tokens
+        are left as-is; missing tokens are simply not substituted.
+        """
+        text = self.user_template
+        for key, value in kwargs.items():
+            text = text.replace("{" + key + "}", (value or "").strip())
+        return text.strip()
+
+    def render_user(self, input_content: str, profile_block: str = "", **extra: str) -> str:
+        return self.render(
+            input_content=input_content, profile_block=profile_block, **extra
+        )
 
 
 @lru_cache(maxsize=32)

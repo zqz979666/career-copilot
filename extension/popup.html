@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: -apple-system, "PingFang SC", sans-serif; width: 340px; margin: 0; padding: 14px; }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      textarea { width: 100%; height: 90px; box-sizing: border-box; resize: vertical; font-size: 13px; padding: 8px; }
+      select, button { font-size: 13px; }
+      .row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+      button.primary { flex: 1; background: #4f46e5; color: #fff; border: none; padding: 9px; border-radius: 6px; cursor: pointer; }
+      button.secondary { flex: 1; background: #e2e8f0; color: #0f172a; border: none; padding: 9px; border-radius: 6px; cursor: pointer; }
+      #status { margin-top: 8px; font-size: 12px; color: #555; min-height: 16px; }
+      a { font-size: 12px; color: #4f46e5; }
+      .divider { border-top: 1px solid #e2e8f0; margin: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>快速录入 · Career Copilot v0.8</h1>
+    <textarea id="content" placeholder="50 字内碎片记录，例如：今天上线了推荐算法灰度，CTR +3%"></textarea>
+    <div class="row">
+      <select id="task">
+        <option value="auto">自动识别</option>
+        <option value="weekly_report">周报</option>
+        <option value="free_format">自由格式</option>
+        <option value="star">STAR</option>
+        <option value="promotion">晋升材料</option>
+        <option value="pr_parse">PR 解析</option>
+      </select>
+      <button class="primary" id="send">发送</button>
+    </div>
+    <div id="status"></div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <button class="secondary" id="gh-sync">⇆ GitHub 同步</button>
+      <button class="secondary" id="panel">⇪ 打开侧边栏</button>
+    </div>
+
+    <div class="row"><a href="#" id="opts">⚙ 设置 API / Token</a></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

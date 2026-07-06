@@ -18,10 +18,10 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.config import get_settings
-from app.logging_config import get_logger
-from app.services.auth_service import AuthError, AuthService
-from app.repository.user_repo import UserRepository
 from app.db import AsyncSessionLocal
+from app.logging_config import get_logger
+from app.repository.user_repo import UserRepository
+from app.services.auth_service import AuthError, AuthService
 
 logger = get_logger(__name__)
 

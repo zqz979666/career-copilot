@@ -7,8 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from app.api.sse import SSE_HEADERS, sse
 from app.api.middleware.rate_limit import enforce_generate_rate_limit
+from app.api.sse import SSE_HEADERS, sse
 from app.config import get_settings
 from app.dependencies import (
     get_generate_service,
@@ -16,13 +16,38 @@ from app.dependencies import (
     get_speech_service,
 )
 from app.logging_config import get_logger
-from app.models.schemas import GenerateRequest
+from app.models.schemas import GenerateRequest, IntentResponse
 from app.services.generate_service import GenerateService
 from app.services.speech_service import SpeechError, WhisperService
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["generate"])
+
+# Voice input targets the efficiency (streaming) chains only.
+VoiceTaskType = Literal[
+    "auto", "weekly_report", "monthly_report", "star", "free_format", "promotion"
+]
+
+
+@router.post("/intent", response_model=IntentResponse)
+async def classify_intent(
+    body: GenerateRequest,
+    service: GenerateService = Depends(get_generate_service),
+) -> IntentResponse:
+    """Master Agent intent classification (rule → Haiku fallback).
+
+    Lets the client preview which chain "auto" would resolve to before
+    committing to a streamed generation.
+    """
+    result = await service.classify_intent(body.input_content)
+    return IntentResponse(
+        intent=result.intent,
+        task_type=result.task_type,
+        agent_type=result.agent_type.value,
+        confidence=result.confidence,
+        method=result.method,
+    )
 
 
 @router.post("/generate", dependencies=[Depends(enforce_generate_rate_limit)])
@@ -66,7 +91,7 @@ async def generate(
 @router.post("/generate/voice", dependencies=[Depends(enforce_generate_rate_limit)])
 async def generate_voice(
     audio: UploadFile = File(..., description="Audio file: mp3/m4a/wav/webm/mp4/mpga/mpeg"),
-    task_type: Literal["weekly_report", "star", "free_format"] = Form(default="weekly_report"),
+    task_type: VoiceTaskType = Form(default="weekly_report"),
     language: str | None = Form(default=None, description="ISO-639-1 (e.g. zh/en); auto-detect if omitted"),
     user_id: UUID | None = Depends(get_optional_user_id),
     service: GenerateService = Depends(get_generate_service),

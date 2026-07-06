@@ -7,15 +7,21 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# System deps (build tools for asyncpg/bcrypt-style deps + curl for healthcheck)
+# System deps:
+#   - build-essential/curl: build asyncpg/bcrypt-style deps + healthcheck
+#   - libpango/cairo/gdk-pixbuf + fonts-noto-cjk: WeasyPrint PDF export (v0.5),
+#     with CJK fonts so Chinese resumes render correctly.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
+    libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+    libffi-dev fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend sources first (hatchling needs the app/ package tree at install time).
 COPY backend /app
 
-RUN pip install --upgrade pip && pip install -e .
+# Install with the [pdf] extra so PDF export works inside the image.
+RUN pip install --upgrade pip && pip install -e ".[pdf]"
 
 EXPOSE 8000
 
