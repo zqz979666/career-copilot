@@ -71,6 +71,8 @@ def test_all_v05_prompts_load() -> None:
         "resume_diagnose",
         "screenshot_parse",
         "intent_classify",
+        "analysis_assess",
+        "job_kit",
     ):
         tpl = load_prompt(name)
         assert tpl.system.strip()

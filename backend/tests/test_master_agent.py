@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import pytest
 
+from app.agents.analysis import AnalysisAgent
 from app.agents.base import AgentContext, AgentType
 from app.agents.efficiency import EfficiencyAgent
+from app.agents.job import JobAgent
 from app.agents.master import MasterAgent
 from app.agents.resume import ResumeAgent
 
@@ -17,6 +19,8 @@ def _master() -> MasterAgent:
     master = MasterAgent(llm=None)
     master.register(EfficiencyAgent(llm=_StubLLM()))  # type: ignore[arg-type]
     master.register(ResumeAgent(llm=_StubLLM()))  # type: ignore[arg-type]
+    master.register(AnalysisAgent(llm=_StubLLM()))  # type: ignore[arg-type]
+    master.register(JobAgent(llm=_StubLLM()))  # type: ignore[arg-type]
     return master
 
 
@@ -30,6 +34,8 @@ def _master() -> MasterAgent:
         ("这是会议纪要，帮我提取", "meeting_parse"),
         ("帮我生成一份简历", "resume_generate"),
         ("分析下这个 JD 的匹配度", "jd_analysis"),
+        ("给我做一次能力评估雷达图", "ability_assessment"),
+        ("帮我生成一套面试题", "job_kit"),
         ("把这段经历整理成 STAR", "star"),
     ],
 )
@@ -55,8 +61,12 @@ def test_route_by_task_type() -> None:
     master = _master()
     eff_ctx = AgentContext(user_id=None, task_type="weekly_report", input_content="x")
     resume_ctx = AgentContext(user_id=None, task_type="jd_analysis", input_content="x")
+    analysis_ctx = AgentContext(user_id=None, task_type="ability_assessment", input_content="x")
+    job_ctx = AgentContext(user_id=None, task_type="job_kit", input_content="x")
     assert master.route(eff_ctx).agent_type == AgentType.EFFICIENCY
     assert master.route(resume_ctx).agent_type == AgentType.RESUME
+    assert master.route(analysis_ctx).agent_type == AgentType.ANALYSIS
+    assert master.route(job_ctx).agent_type == AgentType.JOB
 
 
 def test_route_unknown_task_falls_back_to_efficiency() -> None:
